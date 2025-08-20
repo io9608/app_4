@@ -122,13 +122,6 @@ class GestionProduccion(tk.Frame):
         self.entry_cantidad_producida.grid(row=1, column=1, sticky="w", padx=5, pady=2)
         self.entry_cantidad_producida.insert(0, "1.0") # Valor por defecto
 
-        ttk.Label(info_elaborado_frame, text="Unidad Producida:").grid(row=1, column=2, sticky="w", padx=5, pady=2)
-        self.combobox_unidad_producida = ttk.Combobox(info_elaborado_frame,
-            state="readonly",
-            values=self.unit_converter.get_valid_units(),
-            width=15, style="Modern.TCombobox")
-        self.combobox_unidad_producida.grid(row=1, column=3, sticky="w", padx=5, pady=2)
-
         # --- Contenedor para los Treeviews y Controles ---
         content_frame = ttk.Frame(main_frame, style="TFrame")
         content_frame.grid(row=2, column=0, columnspan=4, sticky="nsew", pady=(10, 0))
@@ -401,17 +394,12 @@ class GestionProduccion(tk.Frame):
         """Registra la producción del producto elaborado."""
         nombre_elaborado = self.entry_nombre_elaborado.get().strip()
         cantidad_producida_str = self.entry_cantidad_producida.get().strip()
-        unidad_producida = self.combobox_unidad_producida.get().strip()
-        
 
         if not nombre_elaborado:
             messagebox.showerror("Error", "El nombre del producto elaborado no puede estar vacío.")
             return
         if not cantidad_producida_str:
             messagebox.showerror("Error", "La cantidad producida no puede estar vacía.")
-            return
-        if not unidad_producida:
-            messagebox.showerror("Error", "Debe seleccionar una unidad para el producto producido.")
             return
         if not self.ingredientes_temporales:
             messagebox.showerror("Error", "Debe añadir al menos un ingrediente para registrar la producción.")
@@ -428,12 +416,11 @@ class GestionProduccion(tk.Frame):
             for ing_id, _, cantidad_usada, unidad_usada, _ in self.ingredientes_temporales:
                 ingredientes_para_manager.append((ing_id, cantidad_usada, unidad_usada))
 
-            # Llamar al manager de producción con la unidad especificada
+            # Llamar al manager de producción
             producto_elaborado_id = self.produccion_manager.registrar_produccion(
                 nombre_producto_elaborado=nombre_elaborado,
                 ingredientes=ingredientes_para_manager,
-                cantidad_producida=cantidad_producida,
-                unidad_producida=unidad_producida
+                cantidad_producida=cantidad_producida
             )
 
             messagebox.showinfo("Éxito", f"Producción de '{nombre_elaborado}' registrada correctamente. ID del producto: {producto_elaborado_id}")

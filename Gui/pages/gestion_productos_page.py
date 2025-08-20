@@ -135,6 +135,7 @@ class GestionProductos(tk.Frame):
         self.btn_cambiar_unidad.pack(side=tk.RIGHT, padx=5)
         self.btn_editar_stock_minimo.pack(side=tk.RIGHT, padx=5)
         self.btn_exportar.pack(side=tk.RIGHT, padx=5)
+        self.btn_eliminar.pack(side=tk.RIGHT, padx=5)
 
     def load_products(self):
         """Carga los productos en el Treeview de forma segura."""

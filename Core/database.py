@@ -1,136 +1,99 @@
+# MultipleFiles/database.py
 import mysql.connector
-from mysql.connector import Error, pooling
-import sys
-import logging
-import os
-from dotenv import load_dotenv
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-# Load environment variables
-load_dotenv()
+from mysql.connector import Error
 
 class Database:
     def __init__(self):
-        # Use environment variables with fallbacks
-        self.config = {
-            'host': os.getenv('DB_HOST', 'localhost'),
-            'database': os.getenv('DB_NAME', 'gestion_negocio'),
-            'user': os.getenv('DB_USER', 'pp'),
-            'password': os.getenv('DB_PASSWORD', '1234'),
-            'port': int(os.getenv('DB_PORT', 3306)),
-            'charset': 'utf8mb4',
-            'collation': 'utf8mb4_unicode_ci',
-            'autocommit': False
-        }
-        self.pool = None
-        self._setup_connection_pool()
+        self.host = 'localhost'
+        self.database = 'gestion_negocio'
+        self.user = 'pp'
+        self.password = '1234'
+        self.connection = None
+        self.cursor = None # Añadir un cursor persistente
 
-    def _setup_connection_pool(self):
-        """Setup connection pooling for better performance"""
-        try:
-            self.pool = pooling.MySQLConnectionPool(
-                pool_name="business_pool",
-                pool_size=5,
-                **self.config
-            )
-            logger.info("Database connection pool established")
-        except Error as e:
-            logger.error(f"Failed to setup connection pool: {e}")
-            raise
+    def connect(self):
+        if self.connection is None or not self.connection.is_connected():
+            try:
+                self.connection = mysql.connector.connect(
+                    host=self.host,
+                    database=self.database,
+                    user=self.user,
+                    password=self.password
+                )
+                # CAMBIO CLAVE: Crear el cursor aquí y mantenerlo abierto
+                self.cursor = self.connection.cursor() 
+                print("Conexión a la base de datos establecida.") # Para depuración
+            except Error as e:
+                print(f"Error al conectar a MariaDB: {e}")
+                self.connection = None # Asegurarse de que sea None si falla
+                self.cursor = None
+        return self.connection
 
     def get_connection(self):
-        """Get connection from pool"""
-        try:
-            return self.pool.get_connection()
-        except Error as e:
-            logger.error(f"Failed to get connection from pool: {e}")
-            raise
+        """Devuelve la conexión a la base de datos."""
+        if self.connection is None or not self.connection.is_connected():
+            self.connect()
+        return self.connection
+
+    def disconnect(self):
+        if self.connection and self.connection.is_connected():
+            # CAMBIO: Verificar si el cursor existe antes de cerrarlo
+            if self.cursor:
+                self.cursor.close()
+                self.cursor = None # Resetear el cursor a None
+            self.connection.close()
+            self.connection = None
+            # print("Conexión a la base de datos cerrada.")
 
     def execute_query(self, query, params=None):
-        """Execute query with proper error handling"""
-        connection = None
-        cursor = None
-        try:
-            connection = self.get_connection()
-            cursor = connection.cursor(dictionary=True)
-            cursor.execute(query, params or ())
-            return cursor, connection
-        except Error as e:
-            if connection:
-                connection.rollback()
-            logger.error(f"Query execution failed: {e}")
-            raise
-        finally:
-            if cursor:
-                cursor.close()
-            if connection:
-                connection.close()
+        self.connect() # Asegurarse de que la conexión esté activa
+        if self.connection and self.cursor: # Asegurarse de que el cursor también esté activo
+            try:
+                self.cursor.execute(query, params or ())
+                # No hacemos commit aquí, lo haremos explícitamente en los managers
+                return self.cursor # Devolver el cursor para que se puedan hacer fetch_one/all
+            except Error as e:
+                print(f"Error en la consulta: {e}") # Para depuración
+                # No hacemos rollback aquí, lo haremos explícitamente en los managers
+                raise e # Relanzar la excepción para que el manager la maneje
+        else:
+            raise Error("Cursor is not connected or connection is closed.") # Lanzar un error si el cursor no está listo
 
     def fetch_one(self, query, params=None):
-        """Fetch single record"""
-        cursor = None
-        connection = None
-        try:
-            cursor, connection = self.execute_query(query, params)
+        # CAMBIO CLAVE: No cerrar el cursor aquí. El cursor es persistente.
+        cursor = self.execute_query(query, params)
+        if cursor:
             result = cursor.fetchone()
-            connection.commit()
             return result
-        except Error as e:
-            logger.error(f"Fetch one failed: {e}")
-            raise
-        finally:
-            if cursor:
-                cursor.close()
-            if connection:
-                connection.close()
+        return None
 
     def fetch_all(self, query, params=None):
-        """Fetch all records"""
-        cursor = None
-        connection = None
-        try:
-            cursor, connection = self.execute_query(query, params)
+        # CAMBIO CLAVE: No cerrar el cursor aquí. El cursor es persistente.
+        cursor = self.execute_query(query, params)
+        if cursor:
             result = cursor.fetchall()
-            connection.commit()
             return result
-        except Error as e:
-            logger.error(f"Fetch all failed: {e}")
-            raise
-        finally:
-            if cursor:
-                cursor.close()
-            if connection:
-                connection.close()
+        return []
 
-    def execute_update(self, query, params=None):
-        """Execute update/insert/delete with transaction support"""
-        cursor = None
-        connection = None
-        try:
-            connection = self.get_connection()
-            cursor = connection.cursor()
-            cursor.execute(query, params or ())
-            connection.commit()
-            return cursor.lastrowid
-        except Error as e:
-            if connection:
-                connection.rollback()
-            logger.error(f"Update failed: {e}")
-            raise
-        finally:
-            if cursor:
-                cursor.close()
-            if connection:
-                connection.close()
+    def commit(self):
+        if self.connection and self.connection.is_connected():
+            try:
+                self.connection.commit()
+                print("Transacción confirmada.")
+            except Error as e:
+                print(f"Error al confirmar la transacción: {e}")
+                raise e # Relanzar la excepción
+
+    def rollback(self):
+        if self.connection and self.connection.is_connected():
+            try:
+                self.connection.rollback()
+                print("Transacción revertida.")
+            except Error as e:
+                print(f"Error al revertir la transacción: {e}")
+                raise e # Relanzar la excepción
 
     def close_connection(self):
-        """Close all connections in pool"""
-        if self.pool:
-            self.pool.close()
-            logger.info("Database connection pool closed")
+        """Cierra la conexión a la base de datos si está abierta."""
+        self.disconnect()
+
