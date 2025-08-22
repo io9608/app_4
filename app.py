@@ -2,6 +2,8 @@
 #bin/python3.11
 import tkinter as tk
 from tkinter import ttk, messagebox
+import logging
+import sys
 from Core.database import Database
 from Core.productos import Productos
 from Core.compras import Compras
@@ -10,6 +12,7 @@ from Core.recetas import RecetasManager
 from Core.ventas import Ventas
 from Core.clientes import Clientes
 from Core.autoconsumo import Autoconsumo
+from Core.common import configure_application_logging, get_logger, logged_method
 from Gui.pages.gestion_productos_page import GestionProductos
 from Gui.pages.gestion_compras_page import GestionCompras
 from Gui.pages.gestion_produccion_page import GestionProduccion
@@ -24,18 +27,51 @@ from Gui.styles import configure_styles
 class App:
     def __init__(self, root):
         self.root = root
-        self.db = Database()
+        
+        # Initialize logging system
+        self._setup_logging()
+        self.logger = get_logger(__name__)
+        
+        self.logger.info("🚀 Iniciando aplicación de gestión comercial")
+        
+        try:
+            self.db = Database()
+            self.logger.info("✅ Conexión a base de datos establecida")
+            
+            # Configurar estilos antes de crear cualquier widget
+            configure_styles()
+            self.logger.debug("✅ Estilos configurados")
+            
+            # CAMBIO CLAVE: Inicializar managers ANTES de configurar la UI
+            self._initialize_managers()
+            
+            self._setup_ui()
+            self.logger.info("✅ Interfaz de usuario configurada")
+            
+            # Añadir el protocolo para cerrar la conexión al cerrar la ventana
+            self.root.protocol("WM_DELETE_WINDOW", self.exit_application)
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error durante inicialización: {e}", exc_info=True)
+            raise
 
-        # Configurar estilos antes de crear cualquier widget
-        configure_styles()
-
-        # CAMBIO CLAVE: Inicializar managers ANTES de configurar la UI
-        self._initialize_managers()
-
-        self._setup_ui()
-
-        # Añadir el protocolo para cerrar la conexión al cerrar la ventana
-        self.root.protocol("WM_DELETE_WINDOW", self.exit_application)
+    def _setup_logging(self):
+        """Configura el sistema de logging para la aplicación"""
+        # Check if debug mode is enabled via command line
+        debug_mode = '--debug' in sys.argv
+        
+        log_level = logging.DEBUG if debug_mode else logging.INFO
+        
+        configure_application_logging(
+            log_level=log_level,
+            log_file='business_app.log',
+            max_file_size=20*1024*1024,  # 20MB
+            backup_count=10,
+            enable_console_colors=True
+        )
+        
+        self.logger = get_logger(__name__)
+        self.logger.info(f"📝 Modo debug {'ACTIVADO' if debug_mode else 'DESACTIVADO'}")
 
     def _setup_ui(self):
         """Configura la interfaz de usuario principal."""
@@ -60,18 +96,37 @@ class App:
         # Mostrar la página de gestión de productos por defecto
         self.show_gestion_productos()
 
+    @logged_method(log_args=False, log_result=False, enable_performance=True)
     def _initialize_managers(self):
         """Inicializa todas las clases de gestión (managers)"""
         try:
+            self.logger.info("📦 Inicializando managers de negocio...")
+            
             self.productos_manager = Productos(self.db)
+            self.logger.debug("✅ Productos manager inicializado")
+            
             self.compras_manager = Compras(self.db, self.productos_manager)
+            self.logger.debug("✅ Compras manager inicializado")
+            
             self.produccion_manager = Produccion(self.db)
+            self.logger.debug("✅ Producción manager inicializado")
+            
             self.recetas_manager = RecetasManager(self.db)
+            self.logger.debug("✅ Recetas manager inicializado")
+            
             self.ventas_manager = Ventas(self.db)
+            self.logger.debug("✅ Ventas manager inicializado")
+            
             self.clientes_manager = Clientes(self.db)
+            self.logger.debug("✅ Clientes manager inicializado")
+            
             self.autoconsumo_manager = Autoconsumo(self.db)
+            self.logger.debug("✅ Autoconsumo manager inicializado")
+            
+            self.logger.info("✅ Todos los managers inicializados exitosamente")
 
         except Exception as e:
+            self.logger.error(f"❌ Error al inicializar managers: {e}", exc_info=True)
             messagebox.showerror("Error de Inicialización", f"No se pudieron inicializar los módulos: {str(e)}")
             self.root.destroy()
 
@@ -211,13 +266,20 @@ class App:
 
     def exit_application(self):
         """Cierra la aplicación y la conexión a la base de datos."""
+        self.logger.info("🚪 Solicitando cierre de aplicación...")
+        
         if messagebox.askyesno("Salir", "¿Está seguro de que desea salir de la aplicación?"):
             try:
-                self.db.close_connection() # Cerrar la conexión a la base de datos
-                print("Conexión a la base de datos cerrada.")
+                self.logger.info("💾 Cerrando conexión a base de datos...")
+                self.db.close_connection()
+                self.logger.info("✅ Conexión a base de datos cerrada")
+                
+                self.logger.info("👋 Aplicación cerrada exitosamente")
+                self.root.destroy()
+                
             except Exception as e:
-                print(f"Error al cerrar la conexión a la base de datos: {e}")
-            self.root.destroy() # Destruir la ventana principal de Tkinter
+                self.logger.error(f"❌ Error al cerrar aplicación: {e}", exc_info=True)
+                self.root.destroy()
 
 # Inicialización de la aplicación
 if __name__ == "__main__":

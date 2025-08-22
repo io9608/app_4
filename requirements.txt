@@ -1,19 +1,19 @@
-# Database
-mysql-connector-python>=8.0.0
-python-dotenv>=0.19.0
+# Dependencias del Sistema de Gestión Comercial
+# Este archivo lista las dependencias necesarias para ejecutar la aplicación
 
-# Caching
-redis>=4.0.0
+# Dependencias básicas (ya incluidas en Python estándar)
+# tkinter - GUI (incluido en Python estándar)
+# sqlite3 - Base de datos (incluido en Python estándar)
 
-# GUI
-tkinter
+# Dependencias opcionales para desarrollo
+# pyinstaller - Solo para crear ejecutables .exe
+# winshell - Solo para crear accesos directos en Windows (opcional)
 
-# Development
-pytest>=7.0.0
-pytest-cov>=4.0.0
-black>=22.0.0
-flake8>=5.0.0
+# Para crear ejecutables .exe:
+# pip install pyinstaller
 
-# Optional: For enhanced features
-pydantic>=1.10.0
-python-dateutil>=2.8.0
+# Para crear accesos directos automáticamente en Windows:
+# pip install winshell pywin32
+
+# Nota: La aplicación está diseñada para funcionar con Python 3.7+
+# sin dependencias externas adicionales
